@@ -1,0 +1,4 @@
+telebot~=0.0.5
+pandas~=1.4.4
+pymongo~=4.4.1
+Pillow~=9.2.0
