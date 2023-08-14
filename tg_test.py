@@ -246,6 +246,6 @@ def png(message):
                            {"$set": {"png": image_data}})
     bot.send_message(message.chat.id, 'Успех!')
 
-
+#
 if __name__ == "__main__":
     bot.polling(none_stop=True)
