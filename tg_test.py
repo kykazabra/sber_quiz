@@ -13,7 +13,7 @@ from gridfs import GridFS
 
 uri = "mongodb+srv://olok1:utofir33@cluster0.lfjwngi.mongodb.net/?retryWrites=true&w=majority"
 client = MongoClient(uri, server_api=ServerApi('1'))
-TOKEN = "5393815864:AAHnIC9LULP5rltphCzMDG40h9T-vwyFUAY"
+TOKEN = "6511630353:AAFxjc7F59bVJwaKOYqhD6KYjqm0AcPYudY"
 bot = telebot.TeleBot(TOKEN)
 
 db = client.testdata
@@ -31,9 +31,9 @@ def p(id):
 
 
 # Функция чтобы вопросы не повторялись
-def chek_next(category, level):
+def chek_next(chat_id, category, level):
     num = [i['_id'] for i in db.questions.find({"category": category, 'level': level})]
-    num_2 = [i['question_id'] for i in db.answer.find({'type': "ask"})]
+    num_2 = [i['question_id'] for i in db.answer.find({"user_id": chat_id, 'type': f'ask_{category}'})]
     choice = random.choice(list(set(num) - set(num_2)))
 
     return choice
@@ -62,6 +62,37 @@ def stats(chat_id, user_data, types, level):
     result_message += f"Отвечено правильно: {correct_answers}\n"
     result_message += f"Время : {times}\n"
     return result_message
+
+
+def finish(chat_id, q_type):
+    check_1 = db.answer.count_documents({"user_id": chat_id, "res": True, "type": f'ask_{q_type}', 'level': 1})
+    check_2 = db.answer.count_documents({"user_id": chat_id, "res": True, "type": f'ask_{q_type}', 'level': 2})
+
+    correct_answers = db.answer.count_documents({"user_id": chat_id, "res": True, "type": f'ask_{q_type}'})
+    total_questions = db.answer.count_documents({"user_id": chat_id, "type": f'ask_{q_type}'})
+    accuracy_percentage = round((correct_answers / total_questions) * 100, 1)
+
+    if (check_1) > 4 and (check_2) > 0:
+
+        text1 = f'Больше половины решено правильно {accuracy_percentage}% отличный результат!\n\
+Если хочешь испытать свои силы на реальных задачах, подавай заявку на стажировку SberSeasons или приходи прокачивать свои IT навыки в Школу 21'
+
+        text2 = 'Подходи на стенд Сбера и получи свой подарочек \n'
+
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        button1 = types.InlineKeyboardButton('SberSeason',
+                                             'https://sbergraduate.ru/sberseasons-moscow/?utm_source=sberu&utm_campaign=event130923')
+        button2 = types.InlineKeyboardButton('Школа 21', 'https://21-school.ru')
+        markup.add(button1, button2)
+
+        bot.send_message(chat_id, text1, reply_markup=markup)
+        bot.send_message(chat_id, text2)
+    else:
+
+        text3 = f'Меньше половины решено правильно.Твой результат: {accuracy_percentage}%\n\
+Не расстраивайся, прокачивайся в {q_type}\n '
+
+        bot.send_message(chat_id, text3)
 
 
 # Вовод вопроса и ответа после выбора
@@ -93,7 +124,7 @@ def start(message):
     user_data = db.test.find_one({"user_id": chat_id})
 
     if not user_data:
-        db.test.insert_one({"user_id": chat_id, "current_question": 1, "level_DS": 1, "level_DE": 1})
+        db.test.insert_one({"user_id": chat_id, "current_question": 1, "level_DS": 1, "level_DE": 1, 'status': 0})
         db.answer.insert_one(
             {"user_id": chat_id, "type": 'start', 'time': datetime.datetime.now().strftime('%H:%M:%S')})
         db.save.insert_one(
@@ -106,23 +137,8 @@ def start(message):
         bot.send_message(chat_id, "Выберите блок:", reply_markup=markup)
 
 
-    elif (user_data.get('level_DE') == 2) and (user_data.get('level_DS') == 2):
-        bot.send_message(chat_id, "ТЫ уже все прошел, СБЕР спасибо !")
-
-
-    elif user_data.get('level_DS') == 2 and user_data.get("current_question") == 6:
-
-        markup = types.ReplyKeyboardMarkup(row_width=1, one_time_keyboard=True)
-        DE = types.KeyboardButton("DE")
-        markup.add(DE)
-        bot.send_message(chat_id, "Выберите блок:", reply_markup=markup)
-
-    elif user_data.get('level_DE') == 2 and user_data.get("current_question") == 6:
-
-        markup = types.ReplyKeyboardMarkup(row_width=1, one_time_keyboard=True)
-        DS = types.KeyboardButton("DS")
-        markup.add(DS)
-        bot.send_message(chat_id, "Выберите блок:", reply_markup=markup)
+    else:
+        pass
 
 
 #
@@ -132,35 +148,36 @@ def handle_direction(message):
     user_data = db.test.find_one({"user_id": chat_id})
     q_type = message.text
     level = user_data.get(f"level_{q_type}", 0)
-    db.answer.insert_one({"user_id": chat_id, 'type': f"press_{q_type}", 'level': level,
-                          'time': datetime.datetime.now().strftime('%H:%M:%S')})
 
-    if user_data.get("current_question") < 5:
+    if user_data.get('status') == 0:
 
-        question_num = user_data.get("current_question", 0)
-        question_data = db.questions.find_one({"_id": chek_next(q_type, level)})
+        db.answer.insert_one({"user_id": chat_id, 'type': f"press_{q_type}", 'level': level,
+                              'time': datetime.datetime.now().strftime('%H:%M:%S')})
+        next_ = db.test.find_one({"user_id": chat_id}).get('current_question')
 
-        if question_data:
-            options = ['A', "B", 'C', 'D']
-            markup = types.InlineKeyboardMarkup(row_width=2)
-            for i in range(len(options)):
-                button = types.InlineKeyboardButton(options[i],
-                                                    callback_data=f'answer_{question_num}_{i + 1}_{q_type}_{level}',
-                                                    resize_keyboard=True)
-                markup.add(button)
+        if user_data.get("current_question") < 10:
 
-            bot.send_message(chat_id, f"Вопрос {user_data['current_question']}")
-            bot.send_photo(chat_id, photo=p(question_data['_id']), reply_markup=markup)
+            question_data = db.questions.find_one({"_id": chek_next(chat_id, q_type, level)})
+            question_num = question_data.get('_id')
 
+            if question_data:
+                options = ['A', "B", 'C', 'D']
+                markup = types.InlineKeyboardMarkup(row_width=2)
+                for i in range(len(options)):
+                    button = types.InlineKeyboardButton(options[i],
+                                                        callback_data=f'answer_{question_num}_{i + 1}_{q_type}_{level}',
+                                                        resize_keyboard=True)
+                    markup.add(button)
 
-        else:
-            bot.send_message(chat_id, "Произошла ошибка при выборе вопросов.")
+                bot.send_message(chat_id, f"Вопрос {user_data['current_question']}")
+                bot.send_photo(chat_id, photo=p(question_data['_id']), reply_markup=markup)
 
-        db.test.update_one({"user_id": chat_id},
-                           {"$set": {"current_question": question_num + 1}})
-
+            db.test.update_one({"user_id": chat_id},
+                               {"$set": {"current_question": next_ + 1}})
+            db.test.update_one({"user_id": chat_id},
+                               {"$set": {"status": 1}})
     else:
-        bot.send_message(chat_id, "Вы уже ответили на все вопросы.")
+        pass
 
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -171,13 +188,13 @@ def callback(call):
         # print(user_data)
 
         parts = call.data.split("_")
-        print(parts)
+        # print(parts)
         question_num = int(parts[1])
         selected_answer = int(parts[2])
         q_type = parts[3]
         # print(q_type)
         # level = int(parts[4])
-        level = int(user_data.get(f"level_{q_type}", 0))
+        level = int(user_data.get(f"level_{q_type}"))
 
         if question_num == 0:
             bot.delete_message(chat_id, call.message.message_id)
@@ -196,9 +213,14 @@ def callback(call):
                                   'type': f'ask_{q_type}', 'level': level,
                                   'time': datetime.datetime.now().strftime('%H:%M:%S')})
 
-        if user_data.get("current_question") < 5 + 1:
-            # print(level,q_type)
-            next_question_num = chek_next(q_type, level)
+        if (user_data.get(f"level_{q_type}") == 1):
+            stop = 8
+        else:
+            stop = 11
+
+        if user_data.get("current_question") < stop:
+            # print('проверка',level,q_type)
+            next_question_num = chek_next(chat_id, q_type, level)
 
             next_question_data = db.questions.find_one({"_id": next_question_num})
 
@@ -221,22 +243,25 @@ def callback(call):
 
 
         elif (user_data.get(f"level_DS") == 2) and (user_data.get(f"level_DE") == 2) and (
-                user_data.get("current_question") == 6):
+                user_data.get("current_question") == 11):
 
             bot.send_message(chat_id, stats(chat_id, user_data, q_type, level))
-            bot.send_message(chat_id, f'Спасибо, что прошел тест. Ждем тебя в СБЕР !')
+            finish(chat_id, q_type)
+            bot.send_message(chat_id, "Спасибо за участие!")
             db.test.update_one({"user_id": chat_id},
                                {"$set": {"current_question": user_data.get("current_question") + 1}})
 
-        elif (user_data.get("current_question") == 6) and (user_data.get(f"level_{q_type}") == 1):
+        elif (user_data.get("current_question") == 8) and (user_data.get(f"level_{q_type}") == 1):
 
             bot.send_message(chat_id, stats(chat_id, user_data, q_type, level))
 
             db.test.update_one({"user_id": chat_id}, {"$set": {f"level_{q_type}": 2}})
-            db.test.update_one({"user_id": chat_id}, {"$set": {"current_question": 1}})
+            # db.test.update_one({"user_id": chat_id}, {"$set": {"current_question": 3}})
 
             #  начало второго уровня
-            next_question_num = chek_next(q_type, level)
+            level = int(db.test.find_one({"user_id": chat_id}).get(f"level_{q_type}"))
+            print(q_type, level)
+            next_question_num = chek_next(chat_id, q_type, level)
             next_question_data = db.questions.find_one({"_id": next_question_num})
 
             if next_question_data:
@@ -248,44 +273,54 @@ def callback(call):
             bot.send_message(chat_id, f"Переходим на второй уровень ?", reply_markup=markup)
 
 
-        elif (user_data.get("current_question") == 6) and (user_data.get(f"level_{q_type}") == 2):
+        elif (user_data.get("current_question") == 11) and (user_data.get(f"level_{q_type}") == 2):
 
             db.answer.delete_one({
                 'type': 'ask',
                 'user_id': chat_id
             })
             bot.send_message(chat_id, stats(chat_id, user_data, q_type, level))
-            bot.send_message(chat_id, f'Поздравляю, ты прошел блок {q_type}')
 
-            db.test.update_one({"user_id": chat_id},
-                               {"$set": {"current_question": user_data.get("current_question") + 1}})
+            res_level_1 = db.answer.count_documents(
+                {"user_id": chat_id, "res": True, "type": f'ask_{q_type}', 'level': 1})
+            res_level_2 = db.answer.count_documents(
+                {"user_id": chat_id, "res": True, "type": f'ask_{q_type}', 'level': 2})
+            if (res_level_1 > 4) and (res_level_2 > 0):
+                finish(chat_id, q_type)
+                bot.send_message(chat_id, "Спасибо за участие!")
 
-            markup = types.ReplyKeyboardMarkup(row_width=1, one_time_keyboard=True)
-
-            if user_data.get('level_DE') == 2:
-                type_key = 'DS'
             else:
-                type_key = 'DE'
 
-            block = types.KeyboardButton(f"{type_key}")
-            markup.add(block)
-            bot.send_message(chat_id, "Оставшиеся блоки:", reply_markup=markup),
+                db.test.update_one({"user_id": chat_id},
+                                   {"$set": {"current_question": user_data.get("current_question") + 1}})
 
-            print(user_data.get("current_question"))
-            db.test.update_one({"user_id": chat_id},
-                               {"$set": {"current_question": 1}})
-            # db.answer.delete_many({"user_id": chat_id})
+                markup = types.ReplyKeyboardMarkup(row_width=1, one_time_keyboard=True)
 
-        elif user_data.get("current_question") > 6:
-            print()
+                if user_data.get('level_DE') == 2:
+                    type_key = 'DS'
+                else:
+                    type_key = 'DE'
+
+                block = types.KeyboardButton(f"{type_key}")
+                markup.add(block)
+                finish(chat_id, q_type)
+                bot.send_message(chat_id, f'Попробуй свои силы в другом блоке:', reply_markup=markup)
+
+                db.test.update_one({"user_id": chat_id},
+                                   {"$set": {"status": 0}})
+                db.test.update_one({"user_id": chat_id},
+                                   {"$set": {"current_question": 1}})
+
+
+        elif user_data.get("current_question") > 10:
+            pass
 
 
 @bot.message_handler(commands=['del'])
 def del_db(message):
-    find = db.test.find_one({"current_question": {'$gt': 0}})['current_question']
-
-    db.test.delete_many({"current_question": find})
-    db.answer.delete_many({})
+    chat_id = message.chat.id
+    db.test.delete_many({"user_id": chat_id})
+    db.answer.delete_many({"user_id": chat_id})
 
     bot.send_message(message.chat.id, 'Успех!')
 
