@@ -74,7 +74,7 @@ def finish(chat_id, q_type):
 
     if (check_1) > 4 and (check_2) > 0:
 
-        text1 = f'Больше половины решено правильно {accuracy_percentage}% отличный результат!\n\
+        text1 = f'Вы набрали больше необходимого количества баллов.\nТвой результат: {accuracy_percentage}% отличный результат!\n\
 Если хочешь испытать свои силы на реальных задачах, подавай заявку на стажировку SberSeasons или приходи прокачивать свои IT навыки в Школу 21'
 
         text2 = 'Подходи на стенд Сбера и получи свой подарочек \n'
@@ -89,7 +89,7 @@ def finish(chat_id, q_type):
         bot.send_message(chat_id, text2)
     else:
 
-        text3 = f'Меньше половины решено правильно.Твой результат: {accuracy_percentage}%\n\
+        text3 = f'Вы набрали меньше необходимого количества баллов.\nТвой результат: {accuracy_percentage}%\n\
 Не расстраивайся, прокачивайся в {q_type}\n '
 
         bot.send_message(chat_id, text3)
@@ -321,6 +321,14 @@ def del_db(message):
     chat_id = message.chat.id
     db.test.delete_many({"user_id": chat_id})
     db.answer.delete_many({"user_id": chat_id})
+
+    bot.send_message(message.chat.id, 'Успех!')
+
+@bot.message_handler(commands=['drop'])
+def drop(message):
+    db.photos.chunks.delete_many({})
+    db.photos.files.delete_many({})
+    db.questions.delete_many({})
 
     bot.send_message(message.chat.id, 'Успех!')
 
