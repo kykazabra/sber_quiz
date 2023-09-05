@@ -127,7 +127,7 @@ def start(message):
         db.test.insert_one({"user_id": chat_id, "current_question": 1, "level_DS": 1, "level_DE": 1, 'status': 0})
         db.answer.insert_one(
             {"user_id": chat_id, "type": 'start', 'time': datetime.datetime.now().strftime('%H:%M:%S')})
-        db.save.insert_one(
+        db.temp_answer.insert_one(
             {"user_id": chat_id, "type": 'start', 'time': datetime.datetime.now().strftime('%H:%M:%S')})
 
         markup = types.ReplyKeyboardMarkup(row_width=2, one_time_keyboard=True)  ### Добавил чтобы клавиатура пропадала
@@ -153,6 +153,9 @@ def handle_direction(message):
 
         db.answer.insert_one({"user_id": chat_id, 'type': f"press_{q_type}", 'level': level,
                               'time': datetime.datetime.now().strftime('%H:%M:%S')})
+        db.temp_answer.insert_one({"user_id": chat_id, 'type': f"press_{q_type}", 'level': level,
+                              'time': datetime.datetime.now().strftime('%H:%M:%S')})
+
         next_ = db.test.find_one({"user_id": chat_id}).get('current_question')
 
         if user_data.get("current_question") < 10:
@@ -200,6 +203,8 @@ def callback(call):
             bot.delete_message(chat_id, call.message.message_id)
             db.answer.insert_one({"user_id": chat_id,
                                   'type': 'press_yes', 'time': datetime.datetime.now().strftime('%H:%M:%S')})
+            db.temp_answer.insert_one({"user_id": chat_id,
+                                  'type': 'press_yes', 'time': datetime.datetime.now().strftime('%H:%M:%S')})
 
         else:
             true_answer = db.questions.find_one({"_id": question_num}).get('correct_answer')
@@ -209,6 +214,11 @@ def callback(call):
             evaluate_question(chat_id, question_num, true_answer, selected_answer)
 
             db.answer.insert_one({"user_id": chat_id, 'question_id': question_num,
+                                  "selected_answer": selected_answer, "true_answer": true_answer, 'res': res,
+                                  'type': f'ask_{q_type}', 'level': level,
+                                  'time': datetime.datetime.now().strftime('%H:%M:%S')})
+
+            db.temp_answer.insert_one({"user_id": chat_id, 'question_id': question_num,
                                   "selected_answer": selected_answer, "true_answer": true_answer, 'res': res,
                                   'type': f'ask_{q_type}', 'level': level,
                                   'time': datetime.datetime.now().strftime('%H:%M:%S')})
@@ -321,16 +331,12 @@ def del_db(message):
     chat_id = message.chat.id
     db.test.delete_many({"user_id": chat_id})
     db.answer.delete_many({"user_id": chat_id})
+    db.temp_answer.insert_one(
+        {"user_id": chat_id, "type": 'del', 'time': datetime.datetime.now().strftime('%H:%M:%S')})
 
     bot.send_message(message.chat.id, 'Успех!')
 
-@bot.message_handler(commands=['drop'])
-def drop(message):
-    db.photos.chunks.delete_many({})
-    db.photos.files.delete_many({})
-    db.questions.delete_many({})
 
-    bot.send_message(message.chat.id, 'Успех!')
 
 
 #
