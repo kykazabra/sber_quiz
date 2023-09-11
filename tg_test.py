@@ -18,6 +18,7 @@ bot = telebot.TeleBot(TOKEN)
 
 db = client.testdata
 
+start_text =("Тест разделен на 2 части: в первой части 7 легких вопросов, а во второй 3 более сложных . За каждый правильный ответ ты получишь балл,твоя задача получить 5 балов в первом модуле и 1 во втором. Можешь не бояться, если не получится пройти тест по выбранному направлению, то ты сможешь попробовать свои силы в другом)\n\nПосле прохождения тестирования не забудь показать свой итоговый результат на стенде Сбера, что бы получить свой приз. Там тебе скажут,что делать дальше.\nПоехали !")
 
 # функциы чтобы извлекать фото из бд
 def p(id):
@@ -83,7 +84,8 @@ def finish(chat_id, q_type):
         button1 = types.InlineKeyboardButton('SberSeason',
                                              'https://sbergraduate.ru/sberseasons-moscow/?utm_source=sberu&utm_campaign=event130923')
         button2 = types.InlineKeyboardButton('Школа 21', 'https://21-school.ru')
-        markup.add(button1, button2)
+        button3 = types.InlineKeyboardButton('Developer Sber', 'https://developers.sber.ru/kak-v-sbere/teams/sber-data')
+        markup.add(button1, button2, button3)
 
         bot.send_message(chat_id, text1, reply_markup=markup)
         bot.send_message(chat_id, text2)
@@ -131,22 +133,23 @@ def start(message):
             {"user_id": chat_id, "type": 'start', 'time': datetime.datetime.now().strftime('%H:%M:%S')})
 
         markup = types.ReplyKeyboardMarkup(row_width=2, one_time_keyboard=True)  ### Добавил чтобы клавиатура пропадала
-        DS = types.KeyboardButton("DS")
-        DE = types.KeyboardButton("DE")
+        DS = types.KeyboardButton("DS\n"
+                                  "(Data Science)")
+        DE = types.KeyboardButton("DE\n"
+                                  "(Data Engineer)")
         markup.add(DS, DE)
+        bot.send_message(chat_id, start_text)
         bot.send_message(chat_id, "Выберите блок:", reply_markup=markup)
-
-
     else:
         pass
 
 
 #
-@bot.message_handler(func=lambda message: message.text in ["DS", "DE"])
+@bot.message_handler(func=lambda message: message.text in ["DS\n(Data Science)", "DE\n(Data Engineer)"])
 def handle_direction(message):
     chat_id = message.chat.id
     user_data = db.test.find_one({"user_id": chat_id})
-    q_type = message.text
+    q_type = (message.text).split('\n')[0]
     level = user_data.get(f"level_{q_type}", 0)
 
     if user_data.get('status') == 0:
@@ -307,9 +310,13 @@ def callback(call):
                 markup = types.ReplyKeyboardMarkup(row_width=1, one_time_keyboard=True)
 
                 if user_data.get('level_DE') == 2:
-                    type_key = 'DS'
+
+
+                    type_key = ("DS\n"
+                                "(Data Science)")
                 else:
-                    type_key = 'DE'
+                    type_key = ("DE\n"
+                                "(Data Engineer)")
 
                 block = types.KeyboardButton(f"{type_key}")
                 markup.add(block)
